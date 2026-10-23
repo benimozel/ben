@@ -18,7 +18,7 @@ STREAM_KEY = os.getenv("STREAM_KEY") or "zirvesa"
 RTMP_SERVER = f"{RTMP_URL}/{STREAM_KEY}"
 
 # Canlı yayın kaynağı (M3U kaldırıldı)
-LIVE_SOURCE_URL = os.getenv("LIVE_SOURCE_URL") or "https://your-live-source-url-here.m3u8"
+LIVE_SOURCE_URL = os.getenv("LIVE_SOURCE_URL") or "https://v2.catcast.tv/content/50736/seg-27708703-v1-a1/index.m3u8"
 STREAM_TITLE = os.getenv("STREAM_TITLE") or "Zirve TV Canlı"
 
 LOGO_URL = os.getenv("LOGO_URL") or "https://i.hizliresim.com/on1bgkjg.png"
