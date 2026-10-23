@@ -1,0 +1,68 @@
+name: maxterli
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Çift yayın çalışmasını engeller
+concurrency:
+  group: maxyerliizle-stream
+  cancel-in-progress: true
+
+jobs:
+  yayin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: write
+    steps:
+    - name: 📥 Depoyu klonla
+      uses: actions/checkout@v4
+
+    - name: 🐍 Python kurulumu
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: 📦 FFmpeg ve Kurulumlar
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends ffmpeg ca-certificates openssl
+        pip install requests
+
+    - name: 📥 Kayıtlı State Dosyasını İndir
+      continue-on-error: true
+      run: |
+        curl -sL "https://github.com/${{ github.repository }}/releases/download/state-data/state_yerli.json" -o state_yerli.json || true
+
+    - name: 🚀 Yayını başlat
+      env:
+        STATE_FILE_NAME: "state_yerli.json"
+        M3U8_URL: "https://v2.catcast.tv/content/50736/seg-27708703-v1-a1/index.m3u8"
+        LOGO_URL: "https://i.hizliresim.com/on1bgkjg.png"
+        STREAM_KEY: "zirvesa"
+      run: python -u bot.py
+
+    - name: 💾 Son Durumu Release Üzerinde Güncelle
+      if: always()
+      uses: softprops/action-gh-release@v1
+      with:
+        files: state_yerli.json
+        tag_name: state-data
+        name: "Yayın Kaldığı Yer (State)"
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 🔁 Otomatik Yeniden Tetikle
+      if: always() && !(github.event_name == 'push' && cancelled())
+      env:
+        GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      run: |
+        curl -s -X POST \
+          -H "Authorization: token $GH_TOKEN" \
+          -H "Accept: application/vnd.github+json" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/yerli2.yml/dispatches" \
+          -d "{\"ref\":\"${{ github.ref_name }}\"}"
