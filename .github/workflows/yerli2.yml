@@ -5,7 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# Çift yayın çalışmasını engeller
 concurrency:
   group: maxyerliizle-stream
   cancel-in-progress: true
@@ -25,24 +24,28 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: 📦 FFmpeg ve Kurulumlar
+    # ⚡ FFmpeg zaten ubuntu-latest runner'da kurulu geliyor — apt-get'e gerek yok
+    # Sadece eksikse kur, hızlı kontrol ile
+    - name: 📦 FFmpeg kontrol (hızlı)
       run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends ffmpeg ca-certificates openssl
-        pip install requests
+        if ! command -v ffmpeg &> /dev/null; then
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+        else
+          echo "✅ FFmpeg zaten kurulu: $(ffmpeg -version | head -n1)"
+        fi
+        pip install --quiet --no-cache-dir requests
 
-    - name: 📥 Kayıtlı State Dosyasını İndir
-      continue-on-error: true
-      run: |
-        curl -sL "https://github.com/${{ github.repository }}/releases/download/state-data/state_yerli.json" -o state_yerli.json || true
-
+    # ⚡ State indirme + yayın başlatma tek adımda, gereksiz bekleme yok
     - name: 🚀 Yayını başlat
       env:
         STATE_FILE_NAME: "state_yerli.json"
         M3U8_URL: "https://v2.catcast.tv/content/50736/seg-27708703-v1-a1/index.m3u8"
         LOGO_URL: "https://i.hizliresim.com/on1bgkjg.png"
         STREAM_KEY: "zirvesa"
-      run: python -u bot.py
+      run: |
+        curl -sL --max-time 10 "https://github.com/${{ github.repository }}/releases/download/state-data/state_yerli.json" -o state_yerli.json 2>/dev/null || true
+        python -u bot.py
 
     - name: 💾 Son Durumu Release Üzerinde Güncelle
       if: always()
