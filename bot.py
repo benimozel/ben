@@ -270,18 +270,28 @@ def start_live_stream():
         has_telegram = os.path.exists('telegram.png') and os.path.getsize('telegram.png') > 0
         has_flag = os.path.exists('turkbayragi.gif') and os.path.getsize('turkbayragi.gif') > 0
 
-        # Sol üst: Türkiye saati (logonun karşısına taşındı)
+        # ==========================================================
+        # OVERLAY YERLEŞİM PLANI (çakışmasız)
+        # ==========================================================
+        # Sol üst   : Logo           (x=50,     y=50)
+        # Sağ üst   : Türk Bayrağı   (x=w-150,  y=50)
+        # Sol alt   : Saat           (x=50,     y=h-th-30)  <-- YENİ
+        # Sağ alt   : Telegram İkon  (x=w-280,  y=h-70)
+        # Sağ alt   : Telegram Yazı  (x=w-tw-30,y=h-th-30)
+        # ==========================================================
+
+        # Sol alt: Türkiye saati (y=h-th-30 ile alt kenara yapışık)
         time_drawtext = (
             f"drawtext=textfile='time.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=20:"
-            f"x=20:y=20:box=1:boxcolor=black@0.5:boxborderw=6"
+            f"x=50:y=h-th-30:box=1:boxcolor=black@0.5:boxborderw=6"
         )
 
-        # Sağ alt: Telegram ikonu + yazı (eski saatin yerine)
+        # Sağ alt: Telegram yazısı (ikonun sağında kalacak şekilde)
         telegram_text_drawtext = (
             f"drawtext=textfile='telegram_text.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=18:"
-            f"x=w-tw-20:y=h-th-20"
+            f"x=w-tw-30:y=h-th-30"
         )
 
         # Giriş dosyaları ve filtre zinciri
@@ -303,7 +313,7 @@ def start_live_stream():
             current_label = 'tmp_logo'
             input_index += 1
 
-        # 2) Türkiye bayrağı GIF (logonun karşısına, sağ üst, x=w-150 y=50 civarı)
+        # 2) Türkiye bayrağı GIF (sağ üst, logonun simetriği)
         if has_flag:
             logo_inputs.extend(['-ignore_loop', '0', '-i', 'turkbayragi.gif'])
             filter_parts.append(
@@ -313,22 +323,23 @@ def start_live_stream():
             current_label = 'tmp_flag'
             input_index += 1
 
-        # 3) Saat (sol üst, logonun olduğu tarafta, y logo ile çakışmasın diye y=150)
+        # 3) Saat (sol alt)
         filter_parts.append(f'[{current_label}]{time_drawtext}[tmp_time]')
         current_label = 'tmp_time'
 
-        # 4) Telegram ikonu (sağ alt, yazının solunda)
+        # 4) Telegram ikonu (sağ alt, yazının SOLUNDA)
         if has_telegram:
             logo_inputs.extend(['-i', 'telegram.png'])
             filter_parts.append(
                 f'[{input_index}:v]scale=-2:40,format=rgba[telegram]'
             )
-            # Telegram ikonunu yazının soluna yerleştir: yazı sağ altta, ikon onun solunda
-            filter_parts.append(f'[{current_label}][telegram]overlay=w-260:h-60[tmp_tg]')
+            filter_parts.append(
+                f'[{current_label}][telegram]overlay=w-280:h-70[tmp_tg]'
+            )
             current_label = 'tmp_tg'
             input_index += 1
 
-        # 5) Telegram yazısı (sağ alt)
+        # 5) Telegram yazısı (sağ alt, ikonun SAĞINDA)
         filter_parts.append(f'[{current_label}]{telegram_text_drawtext}[v]')
         filter_str = ';'.join(filter_parts)
 
