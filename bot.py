@@ -17,7 +17,7 @@ RTMP_URL = "rtmp://ssh101.bozztv.com:1935/ssh101"
 STREAM_KEY = os.getenv("STREAM_KEY") or "zirvesa"
 RTMP_SERVER = f"{RTMP_URL}/{STREAM_KEY}"
 
-# M3U KALDIRILDI - Doğrudan canlı yayın kaynağı
+# Canlı yayın kaynağı (M3U kaldırıldı)
 LIVE_SOURCE_URL = os.getenv("LIVE_SOURCE_URL") or "https://your-live-source-url-here.m3u8"
 STREAM_TITLE = os.getenv("STREAM_TITLE") or "Zirve TV Canlı"
 
@@ -55,7 +55,7 @@ def format_hms(total_seconds):
     return f"{hrs:02d}:{mins:02d}:{secs:02d}"
 
 
-def get_turkey_time():
+def get_turkey_time_str():
     """Türkiye saatini HH:MM:SS formatında döndürür."""
     return datetime.now(TURKEY_TZ).strftime("%H:%M:%S")
 
@@ -164,15 +164,31 @@ def write_telegram_text_file():
         print(f"⚠️ Telegram metin dosyası yazma hatası: {e}")
 
 
-def print_dashboard(title, seconds, status="🟢 Yayında"):
+def write_time_file():
+    """Türkiye saatini dosyaya yazar (drawtext reload için)."""
+    try:
+        with open('time.txt', 'w', encoding='utf-8') as f:
+            f.write(get_turkey_time_str())
+    except Exception as e:
+        print(f"⚠️ Saat dosyası yazma hatası: {e}")
+
+
+def time_updater(stop_event):
+    """Her saniye time.txt dosyasını günceller."""
+    while not stop_event.is_set():
+        write_time_file()
+        stop_event.wait(1)
+
+
+def print_dashboard(title, status="🟢 Yayında"):
     print("┌" + "─" * 58 + "┐")
     print(f"│ 🎬 İçerik         : {title[:36]:<36} │")
-    print(f"│ ⏱️  Türkiye Saati  : {get_turkey_time():<36} │")
+    print(f"│ ⏱️  Türkiye Saati  : {get_turkey_time_str():<36} │")
     print(f"│ 📡 Durum          : {status:<36} │")
     print("└" + "─" * 58 + "┘")
 
 
-def write_step_summary(title, seconds, status="🟢 Yayında"):
+def write_step_summary(title, status="🟢 Yayında"):
     if not GITHUB_STEP_SUMMARY:
         return
     try:
@@ -181,7 +197,7 @@ def write_step_summary(title, seconds, status="🟢 Yayında"):
             "| Alan | Değer |\n"
             "|---|---|\n"
             f"| 🎬 Şu an oynayan içerik | {title} |\n"
-            f"| 🕒 Türkiye Saati | {get_turkey_time()} |\n"
+            f"| 🕒 Türkiye Saati | {get_turkey_time_str()} |\n"
             f"| 📡 Durum | {status} |\n"
             f"| 📱 Telegram | {TELEGRAM_TEXT} |\n"
             f"| 🕒 Son güncelleme | {time.strftime('%Y-%m-%d %H:%M:%S')} |\n"
@@ -202,6 +218,11 @@ def start_live_stream():
     download_telegram_icon()
     write_title_file(STREAM_TITLE)
     write_telegram_text_file()
+    write_time_file()
+
+    # Saat güncelleyici thread
+    stop_event = threading.Event()
+    threading.Thread(target=time_updater, args=(stop_event,), daemon=True).start()
 
     consecutive_failures = 0
     MAX_RETRY_DELAY_SECONDS = 120
@@ -210,7 +231,7 @@ def start_live_stream():
         print("=" * 60)
         print("📺 Zirve TV Canlı Yayın Başlatılıyor")
         print(f"🎬 İçerik            : {STREAM_TITLE}")
-        print(f"🕒 Türkiye Saati     : {get_turkey_time()}")
+        print(f"🕒 Türkiye Saati     : {get_turkey_time_str()}")
 
         headers_arg = f"User-Agent: {STREAM_USER_AGENT}\r\nReferer: {STREAM_REFERER}\r\n"
 
@@ -234,65 +255,65 @@ def start_live_stream():
 
         input_args = input_options + ['-i', LIVE_SOURCE_URL]
 
-        print_dashboard(STREAM_TITLE, 0, status="🟡 Başlatılıyor")
+        print_dashboard(STREAM_TITLE, status="🟡 Başlatılıyor")
 
         has_logo1 = os.path.exists('logo.png') and os.path.getsize('logo.png') > 0
         has_telegram = os.path.exists('telegram.png') and os.path.getsize('telegram.png') > 0
 
-        # Başlık (sol üst) + Telegram ikonu + Telegram yazısı
+        # Sol üst: başlık
         title_drawtext = (
             f"drawtext=textfile='title.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=22:x=20:y=20"
         )
 
-        # Sağ alt: Türkiye saati
-        time_text = "%{eif\\:floor(t/3600)\\:d\\:2}\\:%{eif\\:mod(floor(t/60)\\,60)\\:d\\:2}\\:%{eif\\:mod(t\\,60)\\:d\\:2}"
-        # Bunun yerine gerçek Türkiye saatini göstermek için strftime kullanacağız
-        # FFmpeg drawtext strftime destekler
-        tr_time_drawtext = (
-            f"drawtext=text='%{{localtime\\:%H\\\\\\:%M\\\\\\:%S}}':"
-            f"fontfile='{BOLD_FONT_PATH}':fontcolor=white@{TEXT_OPACITY}:fontsize=20:"
+        # Sağ alt: Türkiye saati (dosyadan okunur, reload=1)
+        time_drawtext = (
+            f"drawtext=textfile='time.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
+            f"fontcolor=white@{TEXT_OPACITY}:fontsize=20:"
             f"x=w-tw-20:y=h-th-20:box=1:boxcolor=black@0.5:boxborderw=6"
         )
 
-        # Telegram yazısı (başlığın yanında)
+        # Sol üst: Telegram yazısı (başlığın altına)
         telegram_text_drawtext = (
-            f"drawtext=text='{TELEGRAM_TEXT}':"
-            f"fontfile='{BOLD_FONT_PATH}':fontcolor=white@{TEXT_OPACITY}:fontsize=18:"
-            f"x=20+tw_title+40:y=24"
+            f"drawtext=textfile='telegram_text.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
+            f"fontcolor=white@{TEXT_OPACITY}:fontsize=18:x=20:y=55"
         )
 
         if has_logo1 and has_telegram:
             logo_inputs = ['-i', 'logo.png', '-i', 'telegram.png']
             filter_str = (
-                '[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,'
-                'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=25[main];'
+                # EKRANI TAM KAPLAMA: force_original_aspect_ratio=increase + crop
+                '[0:v]scale=1920:1080:force_original_aspect_ratio=increase,'
+                'crop=1920:1080,fps=25[main];'
                 f'[1:v]scale=-2:85,format=rgba,colorchannelmixer=aa={LOGO_OPACITY}[logo1];'
                 '[main][logo1]overlay=50:50[tmp1];'
-                # Telegram ikonu sol üstte başlığın yanına
+                # Telegram ikonu sol üstte, başlığın yanında
                 f'[2:v]scale=-2:40,format=rgba[telegram];'
                 f'[tmp1]{title_drawtext}[tmp2];'
-                # Telegram ikonunu başlığın sağına yerleştir (yaklaşık x=20+başlık genişliği)
-                '[tmp2][telegram]overlay=20:20:enable=\'1\'[tmp3];'
-                f'[tmp3]{tr_time_drawtext}[v]'
+                f'[tmp2]{telegram_text_drawtext}[tmp3];'
+                # Telegram ikonunu yazının soluna yerleştir (x=20, y=55)
+                '[tmp3][telegram]overlay=20:55[tmp4];'
+                f'[tmp4]{time_drawtext}[v]'
             )
         elif has_logo1:
             logo_inputs = ['-i', 'logo.png']
             filter_str = (
-                '[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,'
-                'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=25[main];'
+                '[0:v]scale=1920:1080:force_original_aspect_ratio=increase,'
+                'crop=1920:1080,fps=25[main];'
                 f'[1:v]scale=-2:85,format=rgba,colorchannelmixer=aa={LOGO_OPACITY}[logo1];'
                 '[main][logo1]overlay=50:50[tmp1];'
                 f'[tmp1]{title_drawtext}[tmp2];'
-                f'[tmp2]{tr_time_drawtext}[v]'
+                f'[tmp2]{telegram_text_drawtext}[tmp3];'
+                f'[tmp3]{time_drawtext}[v]'
             )
         else:
             logo_inputs = []
             filter_str = (
-                '[0:v]scale=1920:1080:force_original_aspect_ratio=decrease,'
-                'pad=1920:1080:(ow-iw)/2:(oh-ih)/2:black,fps=25[main];'
+                '[0:v]scale=1920:1080:force_original_aspect_ratio=increase,'
+                'crop=1920:1080,fps=25[main];'
                 f'[main]{title_drawtext}[tmp2];'
-                f'[tmp2]{tr_time_drawtext}[v]'
+                f'[tmp2]{telegram_text_drawtext}[tmp3];'
+                f'[tmp3]{time_drawtext}[v]'
             )
 
         publisher.ensure_running()
@@ -349,13 +370,12 @@ def start_live_stream():
                 has_started_progress[0] = True
 
                 if now - last_dashboard_time > 30:
-                    print_dashboard(STREAM_TITLE, 0)
-                    write_step_summary(STREAM_TITLE, 0)
+                    print_dashboard(STREAM_TITLE)
+                    write_step_summary(STREAM_TITLE)
                     last_dashboard_time = now
 
-        # Kopma kontrolü
         print("⚠️ Canlı yayın bağlantısı koptu. Tekrar bağlanılıyor...")
-        write_step_summary(STREAM_TITLE, 0, status="🔴 Bağlantı koptu, tekrar denenecek")
+        write_step_summary(STREAM_TITLE, status="🔴 Bağlantı koptu, tekrar denenecek")
 
         consecutive_failures += 1
         retry_delay = min(5 * (2 ** consecutive_failures), MAX_RETRY_DELAY_SECONDS)
