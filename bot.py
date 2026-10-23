@@ -17,7 +17,6 @@ RTMP_URL = "rtmp://ssh101.bozztv.com:1935/ssh101"
 STREAM_KEY = os.getenv("STREAM_KEY") or "zirvesa"
 RTMP_SERVER = f"{RTMP_URL}/{STREAM_KEY}"
 
-# Canlı yayın kaynağı (M3U kaldırıldı)
 LIVE_SOURCE_URL = os.getenv("LIVE_SOURCE_URL") or "https://v2.catcast.tv/content/50736/seg-27708703-v1-a1/index.m3u8"
 STREAM_TITLE = os.getenv("STREAM_TITLE") or "Zirve TV Canlı"
 
@@ -25,7 +24,6 @@ LOGO_URL = os.getenv("LOGO_URL") or "https://i.hizliresim.com/on1bgkjg.png"
 TELEGRAM_ICON_URL = os.getenv("TELEGRAM_ICON_URL") or "https://upload.wikimedia.org/wikipedia/commons/8/82/Telegram_logo.svg"
 TELEGRAM_TEXT = "t.me/Zirvesa"
 
-# Türkiye bayrağı dalgalanan GIF (doğrudan GIF URL'si veya yerel dosya adı)
 TURKISH_FLAG_GIF_URL = os.getenv("TURKISH_FLAG_GIF_URL") or "https://media.tenor.com/4CfinBexUDgAAAAM/atat%C3%BCrk-bayrak.gif"
 
 STATE_FILE_NAME = os.getenv("STATE_FILE_NAME", "zirvesa.json")
@@ -34,36 +32,22 @@ GITHUB_STEP_SUMMARY = os.getenv("GITHUB_STEP_SUMMARY")
 STREAM_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 STREAM_REFERER = "https://ha.vixolity.com/"
 
-# Logo ve yazı opaklık ayarları (0.0 - 1.0 arası)
 LOGO_OPACITY = float(os.getenv("LOGO_OPACITY", "1.0"))
 TEXT_OPACITY = float(os.getenv("TEXT_OPACITY", "1.0"))
 BOLD_FONT_PATH = os.getenv("BOLD_FONT_PATH", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 
-# Decoder'ı tek thread'e zorlamak için
 DECODER_THREADS = os.getenv("DECODER_THREADS", "1")
 
-# Watchdog Zaman Aşımları (Saniye)
 WATCHDOG_STARTUP_SECONDS = int(os.getenv("WATCHDOG_STARTUP_SECONDS", "60"))
 WATCHDOG_TIMEOUT_SECONDS = int(os.getenv("WATCHDOG_TIMEOUT_SECONDS", "45"))
 
-# Türkiye saati için UTC+3
 TURKEY_TZ = timezone(timedelta(hours=3))
 
 
-def format_hms(total_seconds):
-    total_seconds = max(0, int(total_seconds))
-    hrs = total_seconds // 3600
-    mins = (total_seconds % 3600) // 60
-    secs = total_seconds % 60
-    return f"{hrs:02d}:{mins:02d}:{secs:02d}"
-
-
 def get_turkey_time_str():
-    """Türkiye saatini HH:MM:SS formatında döndürür."""
     return datetime.now(TURKEY_TZ).strftime("%H:%M:%S")
 
 
-# ===================== KALICI RTMP YAYINCISI =====================
 class RtmpPublisher:
     def __init__(self):
         self.proc = None
@@ -157,7 +141,6 @@ def download_turkish_flag():
     else:
         if os.path.exists(TURKISH_FLAG_GIF_URL):
             print(f"✅ Yerel Türk bayrağı GIF bulundu: {TURKISH_FLAG_GIF_URL}")
-            # Yerel dosyayı turkbayragi.gif olarak kopyala (ffmpeg tutarlı isim bekler)
             if TURKISH_FLAG_GIF_URL != 'turkbayragi.gif':
                 import shutil
                 shutil.copy(TURKISH_FLAG_GIF_URL, 'turkbayragi.gif')
@@ -174,7 +157,6 @@ def write_telegram_text_file():
 
 
 def write_time_file():
-    """Türkiye saatini dosyaya yazar (drawtext reload için)."""
     try:
         with open('time.txt', 'w', encoding='utf-8') as f:
             f.write(get_turkey_time_str())
@@ -183,7 +165,6 @@ def write_time_file():
 
 
 def time_updater(stop_event):
-    """Her saniye time.txt dosyasını günceller."""
     while not stop_event.is_set():
         write_time_file()
         stop_event.wait(1)
@@ -230,7 +211,6 @@ def start_live_stream():
     write_telegram_text_file()
     write_time_file()
 
-    # Saat güncelleyici thread
     stop_event = threading.Event()
     threading.Thread(target=time_updater, args=(stop_event,), daemon=True).start()
 
@@ -271,30 +251,29 @@ def start_live_stream():
         has_flag = os.path.exists('turkbayragi.gif') and os.path.getsize('turkbayragi.gif') > 0
 
         # ==========================================================
-        # OVERLAY YERLEŞİM PLANI (çakışmasız)
+        # OVERLAY YERLEŞİM PLANI (kesin çakışmasız)
         # ==========================================================
-        # Sol üst   : Logo           (x=50,     y=50)
-        # Sağ üst   : Türk Bayrağı   (x=w-150,  y=50)
-        # Sol alt   : Saat           (x=50,     y=h-th-30)  <-- YENİ
-        # Sağ alt   : Telegram İkon  (x=w-280,  y=h-70)
-        # Sağ alt   : Telegram Yazı  (x=w-tw-30,y=h-th-30)
+        # Sol üst  : Logo          (50, 50)
+        # Sağ üst  : Türk Bayrağı  (w-tw-50, 50)
+        # Sol alt  : Saat          (50, h-th-30)
+        # Sağ alt  : Telegram İkon (w-tw-230, h-th-30)  -> yazının solunda
+        # Sağ alt  : Telegram Yazı (w-tw-30,  h-th-30)  -> en sağda
         # ==========================================================
 
-        # Sol alt: Türkiye saati (y=h-th-30 ile alt kenara yapışık)
+        # Sol alt: saat
         time_drawtext = (
             f"drawtext=textfile='time.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=20:"
             f"x=50:y=h-th-30:box=1:boxcolor=black@0.5:boxborderw=6"
         )
 
-        # Sağ alt: Telegram yazısı (ikonun sağında kalacak şekilde)
+        # Sağ alt: telegram yazısı (en sağda)
         telegram_text_drawtext = (
             f"drawtext=textfile='telegram_text.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=18:"
             f"x=w-tw-30:y=h-th-30"
         )
 
-        # Giriş dosyaları ve filtre zinciri
         logo_inputs = []
         filter_parts = [
             '[0:v]scale=1920:1080:force_original_aspect_ratio=increase,'
@@ -303,7 +282,7 @@ def start_live_stream():
         current_label = 'main'
         input_index = 1
 
-        # 1) Logo (sol üst, x=50 y=50)
+        # 1) Logo (sol üst)
         if has_logo:
             logo_inputs.extend(['-i', 'logo.png'])
             filter_parts.append(
@@ -313,13 +292,14 @@ def start_live_stream():
             current_label = 'tmp_logo'
             input_index += 1
 
-        # 2) Türkiye bayrağı GIF (sağ üst, logonun simetriği)
+        # 2) Türk bayrağı GIF (sağ üst) -> tw kullanarak sağa hizala
         if has_flag:
             logo_inputs.extend(['-ignore_loop', '0', '-i', 'turkbayragi.gif'])
             filter_parts.append(
                 f'[{input_index}:v]scale=-2:85,format=rgba[flag]'
             )
-            filter_parts.append(f'[{current_label}][flag]overlay=w-150:50[tmp_flag]')
+            # overlay=w-tw-50 : ana video genişliği - bayrak genişliği - 50
+            filter_parts.append(f'[{current_label}][flag]overlay=w-tw-50:50[tmp_flag]')
             current_label = 'tmp_flag'
             input_index += 1
 
@@ -328,18 +308,20 @@ def start_live_stream():
         current_label = 'tmp_time'
 
         # 4) Telegram ikonu (sağ alt, yazının SOLUNDA)
+        #    İkonu yazının soluna koymak için: x = (w-tw-30) - ikon_genişliği - 10
+        #    Yazı sağ kenarda (w-tw-30), ikon onun 230px solunda dursun (yazı max ~220px)
         if has_telegram:
             logo_inputs.extend(['-i', 'telegram.png'])
             filter_parts.append(
                 f'[{input_index}:v]scale=-2:40,format=rgba[telegram]'
             )
             filter_parts.append(
-                f'[{current_label}][telegram]overlay=w-280:h-70[tmp_tg]'
+                f'[{current_label}][telegram]overlay=w-tw-230:h-th-30[tmp_tg]'
             )
             current_label = 'tmp_tg'
             input_index += 1
 
-        # 5) Telegram yazısı (sağ alt, ikonun SAĞINDA)
+        # 5) Telegram yazısı (sağ alt)
         filter_parts.append(f'[{current_label}]{telegram_text_drawtext}[v]')
         filter_str = ';'.join(filter_parts)
 
