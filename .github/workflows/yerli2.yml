@@ -40,13 +40,14 @@ jobs:
         LIVE_SOURCE_URL: "https://v2.catcast.tv/content/50736/seg-27708703-v1-a1/index.m3u8"
         LOGO_URL: "https://i.hizliresim.com/on1bgkjg.png"
         STREAM_KEY: "zirvesa"
+        # Bayrak GIF'ini buradan override edebilirsin (opsiyonel)
         TURKISH_FLAG_GIF_URL: "https://media.tenor.com/4CfinBexUDgAAAAM/atat%C3%BCrk-bayrak.gif"
       run: |
         curl -sL --max-time 10 "https://github.com/${{ github.repository }}/releases/download/state-data/state_yerli.json" -o state_yerli.json 2>/dev/null || true
         python -u bot.py
 
     - name: 💾 Son Durumu Release Üzerinde Güncelle
-      if: always() && hashFiles('state_yerli.json') != ''
+      if: always()
       uses: softprops/action-gh-release@v1
       with:
         files: state_yerli.json
@@ -62,12 +63,8 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.GH_TOKEN }}
       run: |
-        if [ -z "$GH_TOKEN" ]; then
-          echo "⚠️ GH_TOKEN secret tanımlı değil, yeniden tetikleme atlanıyor."
-          exit 0
-        fi
         curl -s -X POST \
           -H "Authorization: token $GH_TOKEN" \
           -H "Accept: application/vnd.github+json" \
-          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/maxterli.yml/dispatches" \
+          "https://api.github.com/repos/${{ github.repository }}/actions/workflows/yerli2.yml/dispatches" \
           -d "{\"ref\":\"${{ github.ref_name }}\"}"
