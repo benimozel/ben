@@ -251,23 +251,27 @@ def start_live_stream():
         has_flag = os.path.exists('turkbayragi.gif') and os.path.getsize('turkbayragi.gif') > 0
 
         # ==========================================================
-        # OVERLAY YERLEŞİM PLANI (kesin çakışmasız)
+        # OVERLAY YERLEŞİM PLANI (KESİN ÇAKIŞMASIZ)
         # ==========================================================
-        # Sol üst  : Logo          (50, 50)
-        # Sağ üst  : Türk Bayrağı  (w-tw-50, 50)
-        # Sol alt  : Saat          (50, h-th-30)
-        # Sağ alt  : Telegram İkon (w-tw-230, h-th-30)  -> yazının solunda
-        # Sağ alt  : Telegram Yazı (w-tw-30,  h-th-30)  -> en sağda
+        # Ana video: 1920x1080
+        #
+        # Sol üst  : Logo           -> overlay=50:50
+        # Sağ üst  : Türk Bayrağı   -> overlay=W-w-50:50
+        #                              (W=1920, w=bayrak genişliği)
+        # Sol alt  : Saat           -> drawtext x=50, y=H-th-30
+        # Sağ alt  : Telegram ikon  -> overlay=W-w-220:H-70
+        #                              (W=1920, w=ikon genişliği, H=1080)
+        # Sağ alt  : Telegram yazı  -> drawtext x=W-tw-30, y=H-th-30
         # ==========================================================
 
-        # Sol alt: saat
+        # Sol alt: saat (drawtext içinde w/h = video boyutu, tw/th = metin boyutu)
         time_drawtext = (
             f"drawtext=textfile='time.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=20:"
             f"x=50:y=h-th-30:box=1:boxcolor=black@0.5:boxborderw=6"
         )
 
-        # Sağ alt: telegram yazısı (en sağda)
+        # Sağ alt: telegram yazısı
         telegram_text_drawtext = (
             f"drawtext=textfile='telegram_text.txt':reload=1:fontfile='{BOLD_FONT_PATH}':"
             f"fontcolor=white@{TEXT_OPACITY}:fontsize=18:"
@@ -282,7 +286,7 @@ def start_live_stream():
         current_label = 'main'
         input_index = 1
 
-        # 1) Logo (sol üst)
+        # 1) Logo (sol üst, 50:50)
         if has_logo:
             logo_inputs.extend(['-i', 'logo.png'])
             filter_parts.append(
@@ -292,14 +296,17 @@ def start_live_stream():
             current_label = 'tmp_logo'
             input_index += 1
 
-        # 2) Türk bayrağı GIF (sağ üst) -> tw kullanarak sağa hizala
+        # 2) Türk bayrağı GIF (sağ üst)
+        #    W = ana video genişliği (1920), w = bayrak genişliği
+        #    overlay ifadesinde W ana video, w overlay kaynağı
         if has_flag:
             logo_inputs.extend(['-ignore_loop', '0', '-i', 'turkbayragi.gif'])
             filter_parts.append(
                 f'[{input_index}:v]scale=-2:85,format=rgba[flag]'
             )
-            # overlay=w-tw-50 : ana video genişliği - bayrak genişliği - 50
-            filter_parts.append(f'[{current_label}][flag]overlay=w-tw-50:50[tmp_flag]')
+            filter_parts.append(
+                f'[{current_label}][flag]overlay=W-w-50:50[tmp_flag]'
+            )
             current_label = 'tmp_flag'
             input_index += 1
 
@@ -307,16 +314,16 @@ def start_live_stream():
         filter_parts.append(f'[{current_label}]{time_drawtext}[tmp_time]')
         current_label = 'tmp_time'
 
-        # 4) Telegram ikonu (sağ alt, yazının SOLUNDA)
-        #    İkonu yazının soluna koymak için: x = (w-tw-30) - ikon_genişliği - 10
-        #    Yazı sağ kenarda (w-tw-30), ikon onun 230px solunda dursun (yazı max ~220px)
+        # 4) Telegram ikonu (sağ alt, yazının SOLUNDA, yazıyla AYNI HİZADA)
+        #    İkon yüksekliği 40px, alt boşluk 30px -> y = H-40-30 = H-70
+        #    İkon x: yazının sağından 220px solda -> W-w-220
         if has_telegram:
             logo_inputs.extend(['-i', 'telegram.png'])
             filter_parts.append(
                 f'[{input_index}:v]scale=-2:40,format=rgba[telegram]'
             )
             filter_parts.append(
-                f'[{current_label}][telegram]overlay=w-tw-230:h-th-30[tmp_tg]'
+                f'[{current_label}][telegram]overlay=W-w-220:H-70[tmp_tg]'
             )
             current_label = 'tmp_tg'
             input_index += 1
